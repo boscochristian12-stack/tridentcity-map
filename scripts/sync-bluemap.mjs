@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
@@ -127,7 +127,9 @@ const mapTileFiles = files.filter(
     /\.(?:prbm(?:\.gz)?|png)$/i.test(file.relativePath),
 );
 if (!mapTileFiles.length) {
-  throw new Error("No rendered BlueMap tile files were found under maps/<map>/tiles.");
+  await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\\n", "utf8");
+  console.log("No rendered BlueMap tiles yet; keeping the existing Pages deployment unchanged.");
+  process.exit(0);
 }
 console.log(
   "Found " +
@@ -135,6 +137,7 @@ console.log(
     " map tile files; examples: " +
     mapTileFiles.slice(0, 3).map((file) => file.relativePath).join(", "),
 );
+await appendFile(process.env.GITHUB_OUTPUT, "site_ready=true\\n", "utf8");
 
 const totalBytes = files.reduce((total, file) => total + file.size, 0);
 if (totalBytes > maxSiteBytes) {
