@@ -125,11 +125,15 @@ do {
   skippedPhpFiles = 0;
   await collectFiles(remoteRoot);
 
-  mapTileFiles = files.filter(
-    (file) =>
-      /^maps\\/[^/]+\\/tiles\\//i.test(file.relativePath) &&
-      /\\.(?:prbm(?:\\.gz)?|png)$/i.test(file.relativePath),
-  );
+  mapTileFiles = files.filter((file) => {
+    const parts = file.relativePath.split("/");
+    return (
+      parts.length >= 4 &&
+      parts[0] === "maps" &&
+      parts[2] === "tiles" &&
+      /\.(?:prbm(?:\.gz)?|png)$/i.test(file.relativePath)
+    );
+  });
   if (mapTileFiles.length || !waitForInitialTiles || Date.now() >= waitDeadline) break;
 
   console.log("No rendered BlueMap tiles yet; checking again in 2 minutes.");
@@ -142,7 +146,7 @@ if (!files.some((file) => file.relativePath === "index.html")) {
   throw new Error("The configured BlueMap web directory does not contain index.html.");
 }
 if (!mapTileFiles.length) {
-  await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\\n", "utf8");
+  await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\n", "utf8");
   console.log("No rendered BlueMap tiles yet; keeping the existing Pages deployment unchanged.");
   process.exit(0);
 }
