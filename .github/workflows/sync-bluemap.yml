@@ -50,6 +50,7 @@ jobs:
           node-version: "22"
 
       - name: Download the BlueMap web files
+        id: sync
         if: steps.token.outputs.configured == 'true'
         env:
           EXAROTON_API_TOKEN: ${{ secrets.EXAROTON_API_TOKEN }}
@@ -57,16 +58,16 @@ jobs:
         run: node scripts/sync-bluemap.mjs
 
       - name: Configure GitHub Pages
-        if: steps.token.outputs.configured == 'true'
+        if: steps.token.outputs.configured == 'true' && steps.sync.outputs.site_ready == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload the Pages artifact
-        if: steps.token.outputs.configured == 'true'
+        if: steps.token.outputs.configured == 'true' && steps.sync.outputs.site_ready == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
       - name: Deploy to GitHub Pages
-        if: steps.token.outputs.configured == 'true'
+        if: steps.token.outputs.configured == 'true' && steps.sync.outputs.site_ready == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
