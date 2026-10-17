@@ -58,6 +58,12 @@ if (matchingServers.length !== 1) {
 }
 
 const server = matchingServers[0];
+const renderWaitRequested = process.env.WAIT_FOR_INITIAL_TILES === "true";
+const serverOnline = Number(server.status) === 1;
+const waitForInitialTiles = renderWaitRequested && serverOnline;
+if (renderWaitRequested && !serverOnline) {
+  console.log("Exaroton reports the server is not online; skipping the initial-render wait.");
+}
 const files = [];
 const visitedDirectories = new Set();
 let skippedPhpFiles = 0;
@@ -115,7 +121,6 @@ async function collectFiles(remotePath, depth = 0) {
   }
 }
 
-const waitForInitialTiles = process.env.WAIT_FOR_INITIAL_TILES === "true";
 const waitDeadline = Date.now() + 60 * 60 * 1000;
 let mapTileFiles = [];
 
