@@ -10,7 +10,6 @@ const repository = process.env.GITHUB_REPOSITORY;
 const remoteRoot = "bluemap/web";
 const siteDirectory = path.join(process.cwd(), "site");
 const apiRoot = "https://api.exaroton.com/v1";
-const maxSiteBytes = 900 * 1024 * 1024;
 
 if (!token) throw new Error("EXAROTON_API_TOKEN is not configured.");
 if (!serverAddress) throw new Error("EXAROTON_SERVER_ADDRESS is not configured.");
@@ -188,12 +187,6 @@ console.log(
 await appendFile(process.env.GITHUB_OUTPUT, "site_ready=true\n", "utf8");
 
 const totalBytes = files.reduce((total, file) => total + file.size, 0);
-if (totalBytes > maxSiteBytes) {
-  throw new Error(
-    "The BlueMap site is larger than the 900 MiB safety limit for this GitHub Pages deployment.",
-  );
-}
-
 await rm(siteDirectory, { recursive: true, force: true });
 await mkdir(siteDirectory, { recursive: true });
 await writeFile(path.join(siteDirectory, ".nojekyll"), "");
@@ -229,13 +222,12 @@ if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
 settings.clientDecompression = true;
 await writeFile(settingsPath, JSON.stringify(settings, null, 2) + "\n");
 
-const repositoryName = repository.split("/")[1];
 const indexPath = path.join(siteDirectory, "index.html");
 let html = await readFile(indexPath, "utf8");
 if (!/<base\b/i.test(html)) {
   const headTag = html.match(/<head\b[^>]*>/i);
   if (!headTag) throw new Error("BlueMap index.html has no head element.");
-  html = html.replace(headTag[0], headTag[0] + '\n    <base href="/' + repositoryName + '/">');
+  html = html.replace(headTag[0], headTag[0] + '\n    <base href="/">');
   await writeFile(indexPath, html);
 }
 
