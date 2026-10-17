@@ -155,6 +155,14 @@ async function downloadWorker() {
 
 await Promise.all(Array.from({ length: Math.min(4, files.length) }, () => downloadWorker()));
 
+const settingsPath = path.join(siteDirectory, "settings.json");
+const settings = JSON.parse(await readFile(settingsPath, "utf8"));
+if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+  throw new Error("BlueMap settings.json does not contain a JSON object.");
+}
+settings.clientDecompression = true;
+await writeFile(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+
 const repositoryName = repository.split("/")[1];
 const indexPath = path.join(siteDirectory, "index.html");
 let html = await readFile(indexPath, "utf8");
