@@ -1,0 +1,67 @@
+name: Sync BlueMap to Cloudflare R2
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-bluemap-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check required secrets
+        id: config
+        env:
+          EXAROTON_API_TOKEN: ${{ secrets.EXAROTON_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$EXAROTON_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ] && [ -n "$CLOUDFLARE_R2_ACCESS_KEY_ID" ] && [ -n "$CLOUDFLARE_R2_SECRET_ACCESS_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare R2 secrets are not configured yet; skipping sync."
+          fi
+
+      - name: Set up Node.js
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Download BlueMap web files
+        id: sync
+        if: steps.config.outputs.configured == 'true'
+        env:
+          EXAROTON_API_TOKEN: ${{ secrets.EXAROTON_API_TOKEN }}
+          EXAROTON_SERVER_ADDRESS: "TridentCity.exaroton.me"
+          WAIT_FOR_INITIAL_TILES: ${{ github.event_name == 'push' && github.event.head_commit.message == 'Publish BlueMap after render' }}
+        run: node scripts/sync-bluemap.mjs
+
+      - name: Upload site to Cloudflare R2
+        if: steps.config.outputs.configured == 'true' && steps.sync.outputs.site_ready == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 sync site "s3://tridentcity-bluemap" \
+            --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --region auto --delete --no-progress
