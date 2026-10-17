@@ -25,7 +25,7 @@ function endpoint(kind, serverId, remotePath) {
   return apiRoot + "/servers/" + encodeURIComponent(serverId) + "/files/" + kind + "/" + pathPart;
 }
 
-async function getJson(url) {
+async function getJson(url, { allowNotFound = false } = {}) {
   const response = await fetch(url, {
     headers: {
       Authorization: "Bearer " + token,
@@ -34,6 +34,10 @@ async function getJson(url) {
   });
 
   if (!response.ok) {
+    if (allowNotFound && response.status === 404) {
+      await response.body?.cancel();
+      return null;
+    }
     throw new Error("exaroton API request failed with HTTP " + response.status + ".");
   }
 
@@ -45,7 +49,7 @@ async function getJson(url) {
 }
 
 async function getFileInfo(serverId, remotePath) {
-  return getJson(endpoint("info", serverId, remotePath));
+  return getJson(endpoint("info", serverId, remotePath), { allowNotFound: true });
 }
 
 const serverList = await getJson(apiRoot + "/servers/");
@@ -67,6 +71,7 @@ if (renderWaitRequested && !serverOnline) {
 const files = [];
 const visitedDirectories = new Set();
 let skippedPhpFiles = 0;
+let missingDirectoriesInScan = 0;
 
 async function collectFiles(remotePath, depth = 0) {
   if (depth > 100) throw new Error("BlueMap directory nesting is unexpectedly deep.");
@@ -78,7 +83,11 @@ async function collectFiles(remotePath, depth = 0) {
   visitedDirectories.add(normalizedDirectory);
 
   const info = await getFileInfo(server.id, normalizedDirectory);
-  if (!info || info.isDirectory !== true || !Array.isArray(info.children)) {
+  if (!info) {
+    missingDirectoriesInScan += 1;
+    return;
+  }
+  if (info.isDirectory !== true || !Array.isArray(info.children)) {
     throw new Error("Could not list the configured BlueMap web directory.");
   }
 
@@ -123,13 +132,16 @@ async function collectFiles(remotePath, depth = 0) {
 
 const waitDeadline = Date.now() + 60 * 60 * 1000;
 let mapTileFiles = [];
+let hasIndex = false;
 
 do {
   files.length = 0;
   visitedDirectories.clear();
   skippedPhpFiles = 0;
+  missingDirectoriesInScan = 0;
   await collectFiles(remoteRoot);
 
+  hasIndex = files.some((file) => file.relativePath === "index.html");
   mapTileFiles = files.filter((file) => {
     const parts = file.relativePath.split("/");
     return (
@@ -139,20 +151,32 @@ do {
       /\.(?:prbm(?:\.gz)?|png)$/i.test(file.relativePath)
     );
   });
-  if (mapTileFiles.length || !waitForInitialTiles || Date.now() >= waitDeadline) break;
 
-  console.log("No rendered BlueMap tiles yet; checking again in 2 minutes.");
+  const scanComplete = hasIndex && missingDirectoriesInScan === 0;
+  if (mapTileFiles.length && scanComplete) break;
+  if (!waitForInitialTiles || Date.now() >= waitDeadline) break;
+
+  console.log("BlueMap files are still changing or tiles are not ready; checking again in 2 minutes.");
   await new Promise((resolve) =>
     setTimeout(resolve, Math.min(120_000, waitDeadline - Date.now())),
   );
 } while (true);
 
-if (!files.some((file) => file.relativePath === "index.html")) {
+if (!hasIndex) {
+  if (missingDirectoriesInScan > 0 || waitForInitialTiles) {
+    await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\n", "utf8");
+    console.log("BlueMap web files are not ready; keeping the existing Pages deployment unchanged.");
+    process.exit(0);
+  }
   throw new Error("The configured BlueMap web directory does not contain index.html.");
 }
-if (!mapTileFiles.length) {
+if (!mapTileFiles.length || missingDirectoriesInScan > 0) {
   await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\n", "utf8");
-  console.log("No rendered BlueMap tiles yet; keeping the existing Pages deployment unchanged.");
+  console.log(
+    missingDirectoriesInScan > 0
+      ? "Exaroton file listing changed during sync; keeping the existing Pages deployment unchanged."
+      : "No rendered BlueMap tiles yet; keeping the existing Pages deployment unchanged.",
+  );
   process.exit(0);
 }
 console.log(
