@@ -31,7 +31,7 @@ export default {
     }
 
     const segments = pathname.split("/").filter(Boolean);
-    if (segments.some((part) => part === "." || part === ".." || part.includes("\\0"))) {
+    if (segments.some((part) => part === "." || part === ".." || part.includes("\0"))) {
       return new Response("Bad request", { status: 400 });
     }
 
