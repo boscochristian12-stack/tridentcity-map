@@ -127,7 +127,7 @@ const mapTileFiles = files.filter(
     /\.(?:prbm(?:\.gz)?|png)$/i.test(file.relativePath),
 );
 if (!mapTileFiles.length) {
-  await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\\n", "utf8");
+  await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\n", "utf8");
   console.log("No rendered BlueMap tiles yet; keeping the existing Pages deployment unchanged.");
   process.exit(0);
 }
@@ -137,7 +137,7 @@ console.log(
     " map tile files; examples: " +
     mapTileFiles.slice(0, 3).map((file) => file.relativePath).join(", "),
 );
-await appendFile(process.env.GITHUB_OUTPUT, "site_ready=true\\n", "utf8");
+await appendFile(process.env.GITHUB_OUTPUT, "site_ready=true\n", "utf8");
 
 const totalBytes = files.reduce((total, file) => total + file.size, 0);
 if (totalBytes > maxSiteBytes) {
