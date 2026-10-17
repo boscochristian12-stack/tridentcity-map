@@ -121,6 +121,21 @@ if (!files.some((file) => file.relativePath === "index.html")) {
   throw new Error("The configured BlueMap web directory does not contain index.html.");
 }
 
+const mapTileFiles = files.filter(
+  (file) =>
+    /^maps\/[^/]+\/tiles\//i.test(file.relativePath) &&
+    /\.(?:prbm(?:\.gz)?|png)$/i.test(file.relativePath),
+);
+if (!mapTileFiles.length) {
+  throw new Error("No rendered BlueMap tile files were found under maps/<map>/tiles.");
+}
+console.log(
+  "Found " +
+    mapTileFiles.length +
+    " map tile files; examples: " +
+    mapTileFiles.slice(0, 3).map((file) => file.relativePath).join(", "),
+);
+
 const totalBytes = files.reduce((total, file) => total + file.size, 0);
 if (totalBytes > maxSiteBytes) {
   throw new Error(
