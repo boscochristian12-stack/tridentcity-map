@@ -115,19 +115,34 @@ async function collectFiles(remotePath, depth = 0) {
   }
 }
 
-await collectFiles(remoteRoot);
+const waitForInitialTiles = process.env.WAIT_FOR_INITIAL_TILES === "true";
+const waitDeadline = Date.now() + 60 * 60 * 1000;
+let mapTileFiles = [];
+
+do {
+  files.length = 0;
+  visitedDirectories.clear();
+  skippedPhpFiles = 0;
+  await collectFiles(remoteRoot);
+
+  mapTileFiles = files.filter(
+    (file) =>
+      /^maps\\/[^/]+\\/tiles\\//i.test(file.relativePath) &&
+      /\\.(?:prbm(?:\\.gz)?|png)$/i.test(file.relativePath),
+  );
+  if (mapTileFiles.length || !waitForInitialTiles || Date.now() >= waitDeadline) break;
+
+  console.log("No rendered BlueMap tiles yet; checking again in 2 minutes.");
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.min(120_000, waitDeadline - Date.now())),
+  );
+} while (true);
 
 if (!files.some((file) => file.relativePath === "index.html")) {
   throw new Error("The configured BlueMap web directory does not contain index.html.");
 }
-
-const mapTileFiles = files.filter(
-  (file) =>
-    /^maps\/[^/]+\/tiles\//i.test(file.relativePath) &&
-    /\.(?:prbm(?:\.gz)?|png)$/i.test(file.relativePath),
-);
 if (!mapTileFiles.length) {
-  await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\n", "utf8");
+  await appendFile(process.env.GITHUB_OUTPUT, "site_ready=false\\n", "utf8");
   console.log("No rendered BlueMap tiles yet; keeping the existing Pages deployment unchanged.");
   process.exit(0);
 }
