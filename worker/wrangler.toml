@@ -1,0 +1,7 @@
+name = "tridentcitymap"
+main = "index.js"
+compatibility_date = "2026-10-17"
+
+[[r2_buckets]]
+binding = "BLUEMAP"
+bucket_name = "tridentcity-bluemap"
